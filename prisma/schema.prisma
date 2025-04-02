@@ -10,11 +10,201 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+enum WeekDay {
+    MONDAY    @map("1")
+    TUESDAY   @map("2")
+    WEDNESDAY @map("3")
+    THURSDAY  @map("4")
+    FRIDAY    @map("5")
+    SATURDAY  @map("6")
+    SUNDAY    @map("7")
+}
 
-    @@index([name])
+enum TaskType {
+    HABIT
+    TASK
+}
+
+enum TaskStatus {
+    TODO
+    INPROGRESS
+    COMPLETED
+    ABANDONED
+}
+
+enum TaskPoints {
+    ONE        @map("1") // 10-15 минут
+    TWO        @map("2") // 20-30 минут
+    THREE      @map("3") // 45 минут - 1 час
+    FIVE       @map("5") // 1.5 - 2.5 часа
+    EIGHT      @map("8") // 3 - 5 часов
+    THIRTEEN   @map("13") // 6 - 12 часов (0.75 - 1.5 дня)
+    TWENTY_ONE @map("21") // 8 - 16 часов (1 - 2 дня)
+}
+
+enum ProgressionPhase {
+    GROWTH // Фаза роста множителя
+    PLATEAU // Фаза плато
+    RECESSION // Фаза восстановления множителя
+}
+
+model Task {
+    id          String     @id @default(uuid())
+    name        String
+    description String?
+    createdAt   DateTime   @default(now())
+    updatedAt   DateTime   @updatedAt
+    status      TaskStatus
+    type        TaskType
+    steps       TaskStep[]
+
+    // Поля для оценки опыта
+    estimatedPoints     TaskPoints?
+    timeEntries         TaskTimeEntry[]
+    spentTimeToComplete Int? // Время выполнения задачи за текущий выполнение
+
+    // Добавляем поля для планирования времени
+    weekFrequency    Int? // Сколько раз в неделю выполняется задача
+    weekDays         WeekDay[] // Дни недели, когда выполняется задача
+    plannedStartTime DateTime? // Запланированное время начала
+    plannedEndTime   DateTime? // Запланированное время окончания
+    isScheduled      Boolean   @default(false) // Флаг, указывающий что задача запланирована
+
+    // Связи
+    categoryId String
+    category   Category @relation(fields: [categoryId], references: [id])
+
+    // Поля для прогрессии опыта
+    progressionPhase          ProgressionPhase? // Фаза прогрессии (рост/плато/спад)
+    stepsBeforePlateau        Int? // Количество шагов до плато
+    stepsOnPlateau            Int? // Сколько выполнений держится плато
+    minGrowthExperienceRatio  Float? // Минимальный множитель опыта (например, 0.5)
+    minDeclineExperienceRatio Float? // Минимальный множитель опыта (например, 0.5)
+
+    // История выполнений
+    actualStartTime   DateTime? // Фактическое время начала
+    actualEndTime     DateTime? // Фактическое время окончания
+    completionStreak  Int? // Сколько раз подряд выполняется задача
+    completionHistory TaskCompletion[]
+
+    // Добавляем связь с целью
+    goalId String?
+    goal   Goal?   @relation(fields: [goalId], references: [id])
+
+    @@index([categoryId])
+    @@index([goalId])
+}
+
+// Модель для отслеживания времени
+model TaskTimeEntry {
+    id        String    @id @default(uuid())
+    taskId    String
+    task      Task      @relation(fields: [taskId], references: [id])
+    startTime DateTime  @default(now())
+    endTime   DateTime?
+    duration  Int? // Длительность в секундах, вычисляется при завершении
+
+    @@index([taskId])
+}
+
+model TaskCompletion {
+    id               String   @id @default(uuid())
+    taskId           String
+    task             Task     @relation(fields: [taskId], references: [id])
+    completedAt      DateTime @default(now())
+    experienceGained Int
+    extraData        Json?
+
+    @@index([taskId])
+}
+
+model TaskStep {
+    id          String   @id @default(uuid())
+    name        String
+    isCompleted Boolean  @default(false)
+    createdAt   DateTime @default(now())
+    order       Int
+
+    taskId String
+    task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+    @@index([taskId])
+}
+
+model Category {
+    id           String  @id @default(uuid())
+    name         String  @unique
+    abbreviation String
+    description  String?
+
+    // Поля для управления уровнем и опытом
+    experience            Int @default(0) // Текущий опыт в категории
+    level                 Int @default(1) // Текущий уровень категории
+    experienceToNextLevel Int @default(100) // Опыт необходимый для следующего уровня
+
+    // Поля для управления балансом опыта
+    baseExperienceToLevel    Int @default(100) // Базовый опыт для первого уровня
+    levelExperienceIncrement Int @default(100) // Прирост опыта для следующего уровня
+
+    // Поля для управления бустом опыта
+    experienceMultiplier    Float @default(1.0) // Текущий множитель опыта
+    maxExperienceMultiplier Float @default(2.0) // Максимальный множитель опыта
+    multiplierGrowthRate    Float @default(0.1) // На сколько растет множитель за каждый день соблюдения условий
+
+    // Требования для поддержания буста
+    requiredDailyTime   Int @default(30) // Минимальное количество секунд активности в день
+    requiredTasksPerDay Int @default(1) // Минимальное количество выполненных задач в день
+
+    // Отслеживание активности
+    lastActivityDate  DateTime? // Дата последней активности
+    currentStreakDays Int       @default(0) // Текущее количество дней подряд с активностью
+    bestStreakDays    Int       @default(0) // Лучшая серия дней с активностью
+
+    // Сброс множителя
+    multiplierDecayRate Float @default(0.2) // Насколько уменьшается множитель при пропуске дня
+    minMultiplier       Float @default(1.0) // Минимальный множитель, ниже которого не опустится
+
+    tasks        Task[]
+    goals        Goal[]
+    levelHistory CategoryLevelHistory[]
+}
+
+model CategoryLevelHistory {
+    id              String   @id @default(uuid())
+    categoryId      String
+    category        Category @relation(fields: [categoryId], references: [id])
+    level           Int // Достигнутый уровень
+    totalExperience Int // Общий опыт на момент получения уровня
+    achievedAt      DateTime @default(now())
+
+    @@index([categoryId])
+}
+
+enum GoalStatus {
+    INPROGRESS
+    COMPLETED
+    ABANDONED
+}
+
+model Goal {
+    id          String     @id @default(uuid())
+    name        String
+    description String?
+    createdAt   DateTime   @default(now())
+    updatedAt   DateTime   @updatedAt
+    status      GoalStatus @default(INPROGRESS)
+
+    // Прогресс цели
+    totalTasks      Int   @default(0) // Общее количество подзадач
+    completedTasks  Int   @default(0) // Количество выполненных подзадач
+    progressPercent Float @default(0) // Процент выполнения
+
+    // Связь с категорией
+    categoryId String
+    category   Category @relation(fields: [categoryId], references: [id])
+
+    // Связь с задачами
+    tasks Task[]
+
+    @@index([categoryId])
 }

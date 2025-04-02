@@ -25,9 +25,7 @@
 
     /* Path Aliases */
     "baseUrl": ".",
-    "paths": {
-      " /*": ["./src/*"]
-    }
+    "paths": { "*": ["./src/*"], "app": ["./src/app/*"] }
   },
   "include": [
     ".eslintrc.cjs",
@@ -37,6 +35,6 @@
     "**/*.cjs",
     "**/*.js",
     ".next/types/**/*.ts"
-  ],
+, "eslint.config.mjs"  ],
   "exclude": ["node_modules"]
 }
