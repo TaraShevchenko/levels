@@ -7,13 +7,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { DateTimeSelector } from 'components/DateTimeSelector'
 import { ScheduleSelector } from 'components/ScheduleSelector'
 import { TaskPointsSelector } from 'components/TaskPointsSelector'
+import { TaskTimer } from 'components/TaskTimer'
 import { TimeRangeSelector } from 'components/TimeRangeSelector'
 import { Badge } from 'components/ui/badge'
 import { Button } from 'components/ui/button'
-import { Timer as TimerComponent } from 'components/ui/timer'
 import { cn } from 'lib/utils'
 import {
-    AlarmClockCheck,
     CheckCircle,
     CheckSquare,
     ListTodo,
@@ -25,7 +24,6 @@ import {
     Trophy,
 } from 'lucide-react'
 import { api } from 'trpc/react'
-import { formatTime } from 'utils/formatTime'
 
 interface TaskItemProps {
     task: Prisma.TaskGetPayload<{
@@ -147,7 +145,21 @@ export function TaskItem({ task, categoryColor, level = 0 }: TaskItemProps) {
                             className="ml-2 flex items-center gap-1 bg-blue-500 px-1.5 text-xs font-normal hover:bg-blue-500"
                         >
                             <Timer className="h-3 w-3 animate-pulse" />
-                            <TimerComponent />
+                            <TaskTimer
+                                initialTime={
+                                    task?.timeEntries[task?.timeEntries.length - 1]?.startTime
+                                        ? Math.floor(
+                                              (new Date().getTime() -
+                                                  new Date(
+                                                      String(
+                                                          task?.timeEntries[task?.timeEntries.length - 1]?.startTime,
+                                                      ),
+                                                  ).getTime()) /
+                                                  1000,
+                                          )
+                                        : 0
+                                }
+                            />
                         </Badge>
                     )}
 

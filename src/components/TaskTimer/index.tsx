@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 
-export function Timer() {
-    const [elapsedSeconds, setElapsedSeconds] = useState(0)
+export function TaskTimer({ initialTime }: { initialTime?: number }) {
+    const [elapsedSeconds, setElapsedSeconds] = useState(initialTime ?? 0)
 
     useEffect(() => {
         const intervalId = setInterval(() => {
